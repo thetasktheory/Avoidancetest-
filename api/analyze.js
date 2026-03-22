@@ -37,8 +37,10 @@ OUTPUT FORMAT — respond with valid JSON only, no markdown, no backticks:
   "what_its_costing": "2-3 sentences. Specific. The quiet tax they pay every day. No drama.",
   "one_thing": "1-2 sentences. Not a 5-step plan. One small concrete doable thing. Starts with a verb."
 }`;
-
 export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST");
+  
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -49,13 +51,40 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing answers" });
   }
 
-  const userMessage = `Q1 - Something I keep meaning to do but haven't started: ${answers.avoiding}
+  const FREE_PROMPT = `You are a clear-eyed, direct mirror. Not a therapist. Not a coach. A brilliant, warm friend who has read too much psychology and will finally say the thing everyone else is too polite to say.
 
-Q2 - When I imagine doing it, the first feeling that shows up: ${answers.feeling}
+Identify the ONE core thing the user is avoiding. Named precisely in 2-5 words.
 
-Q3 - What I tell myself about why I haven't done it: ${answers.story}
+RULES:
+- No therapy language
+- Never be vague
+- No moralizing
+- Tone: warm but unflinching
+- Do NOT mention the questions back
+- No markdown or formatting symbols
 
-Q4 - What would change if I actually did it: ${answers.change}`;
+Respond with valid JSON only, no backticks:
+{"label":"2-5 word name","preview":"4-6 sentence paragraph"}`;
+
+  const FULL_PROMPT = `You are a clear-eyed, direct mirror. Not a therapist. Not a coach. A brilliant, warm friend who has read too much psychology and will finally say the thing everyone else is too polite to say.
+
+Identify the ONE core thing the user is avoiding. Named precisely in 2-5 words.
+
+RULES:
+- No therapy language
+- Never be vague  
+- No moralizing
+- Tone: warm but unflinching
+- Do NOT mention the questions back
+- No markdown or formatting symbols
+
+Respond with valid JSON only, no backticks:
+{"label":"2-5 word name","preview":"4-6 sentences","what_it_is":"2-3 sentences","why_it_makes_sense":"2-3 sentences","what_its_costing":"2-3 sentences","one_thing":"1-2 sentences starting with a verb"}`;
+
+  const userMessage = `Q1: ${answers.avoiding}
+Q2: ${answers.feeling}
+Q3: ${answers.story}
+Q4: ${answers.change}`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -66,21 +95,27 @@ Q4 - What would change if I actually did it: ${answers.change}`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-6",
         max_tokens: 1000,
-        system: full ? FULL_SYSTEM_PROMPT : FREE_SYSTEM_PROMPT,
+        system: full ? FULL_PROMPT : FREE_PROMPT,
         messages: [{ role: "user", content: userMessage }],
       }),
     });
 
     const data = await response.json();
-    const text = data.content?.map((i) => i.text || "").join("") || "";
-    const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
+    
+    if (data.error) {
+      console.error("Anthropic error:", data.error);
+      return res.status(500).json({ error: data.error.message });
+    }
 
+    const text = data.content?.map((i) => i.text || "").join("") || "";
+    const clean = text.replace(/json|/g, "").trim();
+    const parsed = JSON.parse(clean);
     return res.status(200).json(parsed);
+    
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Analysis failed. Please try again." });
+    console.error("Handler error:", err);
+    return res.status(500).json({ error: err.message });
   }
 }
