@@ -37,6 +37,7 @@ OUTPUT FORMAT — respond with valid JSON only, no markdown, no backticks:
   "what_its_costing": "2-3 sentences. Specific. The quiet tax they pay every day. No drama.",
   "one_thing": "1-2 sentences. Not a 5-step plan. One small concrete doable thing. Starts with a verb."
 }`;
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST");
